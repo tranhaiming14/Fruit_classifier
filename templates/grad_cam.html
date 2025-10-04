@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grad-CAM Visualization</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .images {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .images img {
+            max-width: 400px;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Grad-CAM Visualization</h1>
+        <div class="images">
+            <div>
+                <h3>Input Image</h3>
+                <img src="{{ input_image }}" alt="Input Image">
+            </div>
+            <div>
+                <h3>Grad-CAM Image</h3>
+                <img src="{{ grad_cam_image }}" alt="Grad-CAM Image">
+            </div>
+        </div>
+    </div>
+</body>
+</html>

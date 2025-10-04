@@ -8,16 +8,21 @@ from app.class_names import CLASS_NAMES
 from keras.models import load_model
 import keras
 import cv2
+import matplotlib.pyplot as plt
+import tensorflow as tf
+import os  # Ensure this is imported
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 app = FastAPI(title="Fruit Classifier")
-
+app.mount("/images", StaticFiles(directory=os.path.join(PROJECT_ROOT, "images")), name="images")
+app.mount("/static", StaticFiles(directory=os.path.join(PROJECT_ROOT, "static")), name="static")
 # Load models
 efficientnet_model = load_model("efficientnet.h5")
 mobilenet_model = load_model("mobilenet.h5")
 
 # Initialize templates directory
 templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -35,7 +40,7 @@ def predict(request: Request, file: UploadFile = File(...)):
     # Normalize the image and add a batch dimension
     image_array = np.expand_dims(np.array(image) / 255.0, axis=0)
     mobilenet_preds = mobilenet_model.predict(image_array)[0]
-    #Seperate preprocessing for EfficientNet
+    
     img_array = keras.preprocessing.image.img_to_array(image)
     img_array = np.expand_dims(img_array, axis=0) # Add batch dimension
     img_array = keras.applications.efficientnet.preprocess_input(img_array) # Preprocess for EfficientNet
@@ -67,19 +72,17 @@ def realtime_page(request: Request):
 
 def generate_frames():
     camera = cv2.VideoCapture(0)
-    threshold = 0.5  # Confidence threshold
+    threshold = 0.1  # Confidence threshold
 
     while True:
         success, frame = camera.read()
         if not success:
             break
         else:
-            # Preprocess the frame for mobilenet
+            # Preprocess the frame for MobileNet
             #resized_frame = cv2.resize(frame, (224, 224))
             #image_array = np.expand_dims(resized_frame / 255.0, axis=0)
             #predictions = efficientnet_model.predict(image_array)[0]
-            
-            # Preprocess the frame for EfficientNet
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frame = cv2.resize(frame, (224, 224))
             img_array = keras.preprocessing.image.img_to_array(frame)
@@ -128,3 +131,88 @@ def generate_frames():
 @app.get("/video_feed")
 def video_feed():
     return StreamingResponse(generate_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
+    
+
+def make_gradcam_heatmap(img_array, model, last_conv_layer_name="top_conv", pred_index=None):
+    grad_model = keras.models.Model(
+        [model.inputs],
+        [model.get_layer(last_conv_layer_name).output, model.output]
+    )
+
+    with tf.GradientTape() as tape:
+        conv_outputs, predictions = grad_model(img_array)
+        if pred_index is None:
+            pred_index = tf.argmax(predictions[0])
+        class_channel = predictions[:, pred_index]
+
+    grads = tape.gradient(class_channel, conv_outputs)
+    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+
+    conv_outputs = conv_outputs[0]
+    heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
+    heatmap = tf.squeeze(heatmap)
+
+    heatmap = tf.maximum(heatmap, 0) / tf.math.reduce_max(heatmap)
+    return heatmap.numpy()
+
+def save_and_display_gradcam(img_path, heatmap, cam_path="cam.jpg", alpha=0.4):
+    img = cv2.imread(img_path)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    heatmap = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
+    heatmap = np.uint8(255 * heatmap)
+    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+
+    superimposed_img = cv2.addWeighted(img, 1-alpha, heatmap, alpha, 0)
+    cv2.imwrite(cam_path, cv2.cvtColor(superimposed_img, cv2.COLOR_RGB2BGR))
+    return superimposed_img
+
+
+efficientnet_model = tf.keras.models.load_model('efficientnet.h5')
+img_path = "./images/mango.png"
+img = keras.preprocessing.image.load_img(img_path, target_size=(224, 224))
+img_array = keras.preprocessing.image.img_to_array(img)
+img_array = np.expand_dims(img_array, axis=0) / 255.0
+heatmap = make_gradcam_heatmap(img_array, efficientnet_model, last_conv_layer_name="top_conv")
+gradcam_img = save_and_display_gradcam(img_path, heatmap, cam_path="gradcam.jpg")
+plt.imshow(gradcam_img)
+plt.axis("off")
+#plt.show()
+
+@app.get("/grad_cam")
+def grad_cam_endpoint(request: Request):
+    from PIL import Image
+    #Use the fixed image path
+    #image_path = os.path.join(PROJECT_ROOT, "images", "corn.png")
+    image_path = "images/mango__.png"
+    image = Image.open(image_path).convert("RGB")
+    image = image.resize((224, 224))
+    img_array = keras.preprocessing.image.img_to_array(image)
+    img_array = np.expand_dims(img_array, axis=0) # Add batch dimension
+    img_array = keras.applications.efficientnet.preprocess_input(img_array) # Preprocess for EfficientNet
+
+    # Generate Grad-CAM heatmap
+    grad_cam_path = os.path.join(PROJECT_ROOT, "static", "temp_gradcam.png")
+
+    # Debugging: Print the file path
+    print(f"Grad-CAM path: {grad_cam_path}")
+
+    # Check if the file exists and delete it
+    if os.path.exists(grad_cam_path):
+        try:
+            os.remove(grad_cam_path)
+            print("Old Grad-CAM file removed successfully.")
+        except Exception as e:
+            print(f"Error removing file: {e}")
+    else:
+        print("No existing Grad-CAM file to remove.")
+
+    heatmap = make_gradcam_heatmap(img_array, efficientnet_model, last_conv_layer_name="top_conv")
+    grad_cam_image = save_and_display_gradcam(image_path, heatmap, cam_path=grad_cam_path)
+
+    # Return both images as a response
+    return templates.TemplateResponse("grad_cam.html", {
+        "request": request,
+        "input_image": image_path,
+        "grad_cam_image": "static/temp_gradcam.png"
+    })
