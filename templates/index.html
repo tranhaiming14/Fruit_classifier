@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Fruit Classifier</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: space-between;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            display: flex;
+            width: 100%;
+        }
+        .upload-section {
+            width: 50%;
+            padding: 20px;
+        }
+        .results-section {
+            width: 50%;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .prediction-bar {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .prediction-bar span {
+            width: 150px;
+        }
+        .bar {
+            flex: 1;
+            background-color: #e0e0e0;
+            height: 20px;
+            position: relative;
+        }
+        .bar-fill {
+            background-color: #76c7c0;
+            height: 100%;
+            position: absolute;
+        }
+        .bar-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            line-height: 20px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="upload-section">
+            <h1>Upload a file here</h1>
+            <form action="/predict" method="post" enctype="multipart/form-data">
+                <input type="file" name="file" accept="image/*" required />
+                <button type="submit">Upload</button>
+            </form>
+        </div>
+        <div class="results-section">
+            <h2>Predictions</h2>
+            {% if predictions %}
+                <h3>EfficientNet Predictions</h3>
+                {% for result in predictions.efficientnet %}
+                    <div class="prediction-bar">
+                        <span>{{ result.class }}</span>
+                        <div class="bar">
+                            <div class="bar-fill" style="width: {{ result.confidence }};"></div>
+                            <div class="bar-text">{{ result.confidence }}</div>
+                        </div>
+                    </div>
+                {% endfor %}
+                <h3>MobileNet Predictions</h3>
+                {% for result in predictions.mobilenet %}
+                    <div class="prediction-bar">
+                        <span>{{ result.class }}</span>
+                        <div class="bar">
+                            <div class="bar-fill" style="width: {{ result.confidence }};"></div>
+                            <div class="bar-text">{{ result.confidence }}</div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p>No predictions yet. Upload an image to see results.</p>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

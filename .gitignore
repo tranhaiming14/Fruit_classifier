@@ -15,4 +15,3 @@ env/
 build/
 dist/
 *.egg-info/
-*.h5
