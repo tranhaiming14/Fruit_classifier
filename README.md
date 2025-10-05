@@ -1,6 +1,3 @@
-# FastAPI Prototype
-
-Minimal FastAPI app that displays a dynamic H1 heading.
 
 ## Quickstart (Windows PowerShell)
 
@@ -32,12 +29,6 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - Home: http://127.0.0.1:8000/
 - Dynamic H1: http://127.0.0.1:8000/hello/Copilot
 
-## Edit
-- Change the dynamic content by editing `app/main.py` in the `/hello/{title}` route.
-- The server reloads automatically when files change.
-
 ## Stop
 - Press `Ctrl+C` in the terminal.
 
----
-This is a prototype; no database or templates are used. For templating later, consider Jinja2 with FastAPI's `Jinja2Templates`.
