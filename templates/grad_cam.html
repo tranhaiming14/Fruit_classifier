@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grad-CAM Visualization</title>
+    <title>Grad-CAM</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -11,12 +11,30 @@
             margin: 0;
             padding: 0;
         }
-        .container {
+        .navbar {
+            background-color: #333;
+            overflow: hidden;
             display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
+        }
+        .navbar a {
+            color: white;
+            padding: 14px 20px;
+            text-decoration: none;
+            text-align: center;
+        }
+        .navbar a:hover {
+            background-color: #ddd;
+            color: black;
+        }
+        .container {
+            margin-top: 50px;
+        }
+        .upload-form {
             margin-top: 20px;
+        }
+        .upload-form input[type="file"] {
+            margin-bottom: 10px;
         }
         .images {
             display: flex;
@@ -25,25 +43,89 @@
             margin-top: 20px;
         }
         .images img {
-            max-width: 400px;
-            border: 2px solid #ccc;
+            max-width: 300px;
+            border: 1px solid #ccc;
             border-radius: 8px;
+        }
+        .predictions {
+            margin-top: 20px;
+        }
+        .prediction {
+            margin: 5px 0;
         }
     </style>
 </head>
 <body>
+    <div class="navbar">
+        <a href="/">Home</a>
+        <a href="/realtime">Realtime</a>
+        <a href="/grad_cam">GRAD CAM</a>
+    </div>
     <div class="container">
         <h1>Grad-CAM Visualization</h1>
-        <div class="images">
+        <form class="upload-form" action="/grad_cam" method="post" enctype="multipart/form-data">
+            <input type="file" name="file" accept="image/*" required>
+            <br>
+            <button type="submit">Upload and Process</button>
+        </form>
+        <div class="loading" id="loading" style="display: none;">
+            <p>Processing... Please wait.</p>
+        </div>
+        <div class="images" id="images" style="display: none;">
             <div>
                 <h3>Input Image</h3>
-                <img src="{{ input_image }}" alt="Input Image">
+                <img id="input-image" src="" alt="">
             </div>
             <div>
                 <h3>Grad-CAM Image</h3>
-                <img src="{{ grad_cam_image }}" alt="Grad-CAM Image">
+                <img id="grad-cam-image" src="" alt="">
+            </div>
+        </div>
+        <div class="predictions" id="predictions" style="display: none;">
+            <h2>Top Predictions</h2>
+            <div class="prediction" id="prediction-template" style="display: none;">
+                <strong class="prediction-class"></strong>: <span class="prediction-confidence"></span>
             </div>
         </div>
     </div>
+    <script>
+        const form = document.querySelector(".upload-form");
+        const loading = document.getElementById("loading");
+        const images = document.getElementById("images");
+        const inputImage = document.getElementById("input-image");
+        const gradCamImage = document.getElementById("grad-cam-image");
+        const predictionsDiv = document.getElementById("predictions");
+        const predictionTemplate = document.getElementById("prediction-template");
+
+        form.addEventListener("submit", () => {
+            loading.style.display = "block";
+            images.style.display = "none";
+            predictionsDiv.style.display = "none";
+        });
+
+        window.onload = () => {
+            const inputImageUrl = "{{ input_image }}";
+            const gradCamImageUrl = "{{ grad_cam_image }}";
+            const predictions = {{ predictions | tojson }};
+            if (inputImageUrl && gradCamImageUrl) {
+                inputImage.src = inputImageUrl;
+                gradCamImage.src = gradCamImageUrl;
+                images.style.display = "flex";
+                loading.style.display = "none";
+            }
+            if (predictions && predictions.length > 0) {
+                predictionsDiv.style.display = "block";
+                predictions.forEach((prediction, index) => {
+                    if (index < 3) {
+                        const predictionClone = predictionTemplate.cloneNode(true);
+                        predictionClone.style.display = "block";
+                        predictionClone.querySelector(".prediction-class").textContent = prediction.class;
+                        predictionClone.querySelector(".prediction-confidence").textContent = prediction.confidence;
+                        predictionsDiv.appendChild(predictionClone);
+                    }
+                });
+            }
+        };
+    </script>
 </body>
 </html>

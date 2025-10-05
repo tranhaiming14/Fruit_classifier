@@ -168,51 +168,53 @@ def save_and_display_gradcam(img_path, heatmap, cam_path="cam.jpg", alpha=0.4):
     return superimposed_img
 
 
-efficientnet_model = tf.keras.models.load_model('efficientnet.h5')
-img_path = "./images/mango.png"
-img = keras.preprocessing.image.load_img(img_path, target_size=(224, 224))
-img_array = keras.preprocessing.image.img_to_array(img)
-img_array = np.expand_dims(img_array, axis=0) / 255.0
-heatmap = make_gradcam_heatmap(img_array, efficientnet_model, last_conv_layer_name="top_conv")
-gradcam_img = save_and_display_gradcam(img_path, heatmap, cam_path="gradcam.jpg")
-plt.imshow(gradcam_img)
-plt.axis("off")
-#plt.show()
-
-@app.get("/grad_cam")
-def grad_cam_endpoint(request: Request):
+@app.api_route("/grad_cam", methods=["GET", "POST"], response_class=HTMLResponse)
+async def grad_cam_endpoint(request: Request, file: UploadFile = None):
     from PIL import Image
-    #Use the fixed image path
-    #image_path = os.path.join(PROJECT_ROOT, "images", "corn.png")
-    image_path = "images/mango__.png"
-    image = Image.open(image_path).convert("RGB")
-    image = image.resize((224, 224))
-    img_array = keras.preprocessing.image.img_to_array(image)
-    img_array = np.expand_dims(img_array, axis=0) # Add batch dimension
-    img_array = keras.applications.efficientnet.preprocess_input(img_array) # Preprocess for EfficientNet
 
-    # Generate Grad-CAM heatmap
-    grad_cam_path = os.path.join(PROJECT_ROOT, "static", "temp_gradcam.png")
+    if request.method == "GET":
+        # Render the upload form
+        return templates.TemplateResponse("grad_cam.html", {
+            "request": request,
+            "input_image": None,
+            "grad_cam_image": None,
+            "predictions": None
+        })
 
-    # Debugging: Print the file path
-    print(f"Grad-CAM path: {grad_cam_path}")
+    if request.method == "POST" and file:
+        # Save the uploaded file temporarily
+        static_dir = os.path.join(PROJECT_ROOT, "static")
+        uploaded_image_path = os.path.join(static_dir, "uploaded_image.jpg")
+        with open(uploaded_image_path, "wb") as f:
+            f.write(await file.read())
 
-    # Check if the file exists and delete it
-    if os.path.exists(grad_cam_path):
-        try:
-            os.remove(grad_cam_path)
-            print("Old Grad-CAM file removed successfully.")
-        except Exception as e:
-            print(f"Error removing file: {e}")
-    else:
-        print("No existing Grad-CAM file to remove.")
+        # Preprocess the uploaded image
+        image = Image.open(uploaded_image_path).convert("RGB")
+        image = image.resize((224, 224))
+        img_array = keras.preprocessing.image.img_to_array(image)
+        img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+        img_array = keras.applications.efficientnet.preprocess_input(img_array)  # Preprocess for EfficientNet
 
-    heatmap = make_gradcam_heatmap(img_array, efficientnet_model, last_conv_layer_name="top_conv")
-    grad_cam_image = save_and_display_gradcam(image_path, heatmap, cam_path=grad_cam_path)
+        # Generate predictions
+        predictions = efficientnet_model.predict(img_array)[0]
+        top_predictions = sorted(enumerate(predictions), key=lambda x: x[1], reverse=True)[:3]
+        prediction_results = [
+            {"class": CLASS_NAMES[i], "confidence": f"{prob:.2%}"} for i, prob in top_predictions
+        ]
 
-    # Return both images as a response
-    return templates.TemplateResponse("grad_cam.html", {
-        "request": request,
-        "input_image": image_path,
-        "grad_cam_image": "static/temp_gradcam.png"
-    })
+        # Generate Grad-CAM heatmap
+        grad_cam_path = os.path.join(static_dir, "gradcam_uploaded.jpg")
+        heatmap = make_gradcam_heatmap(img_array, efficientnet_model, last_conv_layer_name="top_conv")
+        save_and_display_gradcam(uploaded_image_path, heatmap, cam_path=grad_cam_path)
+
+        # URLs for the images
+        input_image_url = "/static/uploaded_image.jpg"
+        grad_cam_image_url = "/static/gradcam_uploaded.jpg"
+
+        # Render the template with the image URLs and predictions
+        return templates.TemplateResponse("grad_cam.html", {
+            "request": request,
+            "input_image": input_image_url,
+            "grad_cam_image": grad_cam_image_url,
+            "predictions": prediction_results
+        })
